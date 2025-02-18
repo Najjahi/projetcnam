@@ -1,7 +1,8 @@
 from tokenize import String
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, SubmitField, BooleanField
-from projet.models import User
+from flask_wtf.file import FileField, FileAllowed
+from flask_login import current_user
+from wtforms import StringField, PasswordField, SubmitField, BooleanField, TextAreaField
 from wtforms.validators import (
     DataRequired,
     Length,
@@ -12,6 +13,7 @@ from wtforms.validators import (
 )
 
 from projet.models import User
+
 
 class RegistrationForm(FlaskForm):
     fname = StringField(
@@ -32,18 +34,23 @@ class RegistrationForm(FlaskForm):
         ],
     )
     confirm_password = PasswordField(
-        "Confirmation du mot de passe", validators=[DataRequired(), EqualTo("password")]
+        "Confirm Password", validators=[DataRequired(), EqualTo("password")]
     )
-    submit = SubmitField("S'enregistrer")
+    submit = SubmitField("S'inscrire")
 
     def validate_username(self, username):
         user = User.query.filter_by(username=username.data).first()
         if user:
-            raise ValidationError("Ce nom d'utilisateur est déjà pris. Veuillez en choisir un autre.")
+            raise ValidationError(
+                "Username already exists! Please chosse a different one"
+            )
+
     def validate_email(self, email):
         user = User.query.filter_by(email=email.data).first()
         if user:
-            raise ValidationError("Cet email est déjà pris. Veuillez en choisir un autre.")
+            raise ValidationError("Email already exists! Please chosse a different one")
+
+
 class LoginForm(FlaskForm):
     email = StringField("Email", validators=[DataRequired(), Email()])
     password = PasswordField(
@@ -52,5 +59,32 @@ class LoginForm(FlaskForm):
             DataRequired(),
         ],
     )
-    remember = BooleanField("Souviens-toi de moi")
-    submit = SubmitField("Se connecter")
+    remember = BooleanField("Remember Me")
+    submit = SubmitField("Log In")
+
+class UpdateProfileForm(FlaskForm):
+    username = StringField(
+        "Username", validators=[DataRequired(), Length(min=2, max=25)]
+    )
+    email = StringField("Email", validators=[DataRequired(), Email()])
+    bio = TextAreaField("Bio")
+    picture = FileField(
+        "Update Profile Picture", validators=[FileAllowed(["jpg", "png"])]
+    )
+    submit = SubmitField("Update")
+
+    def validate_username(self, username):
+        if username.data != current_user.username:
+            user = User.query.filter_by(username=username.data).first()
+            if user:
+                raise ValidationError(
+                    "Username already exists! Please chosse a different one"
+                )
+
+    def validate_email(self, email):
+        if email.data != current_user.email:
+            user = User.query.filter_by(email=email.data).first()
+            if user:
+                raise ValidationError(
+                    "Email already exists! Please chosse a different one"
+                )

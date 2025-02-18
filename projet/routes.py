@@ -1,7 +1,10 @@
-from projet import app, db, bcrypt
-from flask import render_template, url_for, flash, redirect
+import secrets
+from PIL import Image
+import os
 from projet.models import User, recette, Cuisine
-from projet.forms import RegistrationForm, LoginForm
+from flask import render_template, url_for, flash, redirect, request
+from projet.forms import RegistrationForm, LoginForm, UpdateProfileForm
+from projet import app, bcrypt, db
 from flask_login import (
     login_required,
     login_user,
@@ -10,8 +13,11 @@ from flask_login import (
     login_required,
 )
 
+
+
 with app.app_context():
-    #db.create_all()  # Crée toutes les tables définies par tes modèles
+    db.create_all()  # Crée toutes les tables définies par tes modèles
+    print("Tables créées avec succès")
     # Créer un nouvel utilisateur
     #user_1 = User(fname = 'imane', lname = 'najjahi', username = 'imane', email = 'imane@gmail.com', password = 'R@yane1917')
     #db.session.add(user_1)
@@ -19,8 +25,11 @@ with app.app_context():
     #user_2 = User(fname = 'anas', lname = 'najjahi', username = 'anas' , email = 'anas@gmail.com', password = 'R@yane1917')
     #db.session.add(user_2)
     #db.session.commit()
+    #user_3 = User(fname = 'izdi', lname = 'najjahi', username = 'izdi' , email = 'izdi@gmail.com', password = 'R@yane1917')
+    #db.session.add(user_3)
+    #db.session.commit()
 
-    print("Utilisateur ajouté avec succès")
+    # Afficher tous les utilisateurs
     users = User.query.all()
     for user in users:
         print(f"{user.fname} {user.lname}, Email: {user.email}")
@@ -108,14 +117,16 @@ def about():
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
+    if current_user.is_authenticated:
+        return redirect(url_for("home"))
     form = RegistrationForm()
     if form.validate_on_submit():
-        existing_user = User.query.filter_by(email=form.email.data).first()
-        if existing_user:
-            flash(f"L'email {form.email.data} est déjà utilisé. Veuillez en choisir un autre.", "danger")
-            return redirect(url_for("register"))
-        
+        #existing_user = User.query.filter_by(email=form.email.data).first()
+        #if existing_user:
+            #flash("Email already exists! Please choose a different one", "danger")
+        #else:    
         hashed_password = bcrypt.generate_password_hash(form.password.data).decode("utf-8")        
+            
         user = User(
             fname=form.fname.data, 
             lname=form.lname.data, 
@@ -131,20 +142,16 @@ def register():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    if current_user.is_authenticated:
+        return redirect(url_for("home"))
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
         if user and bcrypt.check_password_hash(user.password, form.password.data):
             login_user(user, remember=form.remember.data)
-            flash("Vous etes connecté!", "success")
-            return redirect(url_for("home"))
-        if ( 
-            form.email.data == "imane@gmail.com"
-            and form.password.data == "R@yane2017"
-        ):  
-           
-            flash("Vous etes bien connecté!", "success")
-            return redirect(url_for("home"))
+            next_page = request.args.get('next')
+            flash("You have been logged in!", "success")
+            return redirect(next_page) if next_page else redirect(url_for("home"))
         else:
             flash("Login Unsuccessful. Please check credentials", "danger")
     return render_template("login.html", title="Login", form=form)
@@ -157,4 +164,25 @@ def logout():
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    return render_template("dashboard.html", title="Dashboard")
+    profile_form = UpdateProfileForm()
+    if profile_form.validate_on_submit():
+        if profile_form.picture.data:
+            picture_file = save_picture(profile_form.picture.data)
+            current_user.image_file = picture_file
+        current_user.username = profile_form.username.data
+        current_user.email = profile_form.email.data
+        current_user.bio = profile_form.bio.data
+        db.session.commit()
+        flash("Your profile has been updated", "success")
+        return redirect(url_for("dashboard"))
+    elif request.method == "GET":
+        profile_form.username.data = current_user.username
+        profile_form.email.data = current_user.email
+        profile_form.bio.data = current_user.bio
+    image_file = url_for("static", filename=f"user_pics/{current_user.image_file}")
+    return render_template(
+        "dashboard.html",
+        title="Dashboard",
+        profile_form=profile_form,
+        image_file=image_file,
+    )
